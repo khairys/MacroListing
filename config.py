@@ -13,13 +13,13 @@ EXCEL_FILE_PATH = os.path.join(DATA_DIR, "data.xlsx")
 TARGET_URL = "https://zeusx.com/create-offer"
 
 # Playwright Settings
-HEADLESS = False  # Set to True for production, False for development
+HEADLESS = False  # Development mode requires False
 MAX_RETRIES = 2
 
 # Image Settings
-IMAGE_EXTENSION = ".jpg"
+IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
-# Development / Testing Modes
-DRY_RUN = True  # If True, form is filled but 'List Items' is NOT clicked
-TEST_SINGLE_ROW = True  # If True, only processes one specific row
-TEST_ROW_NO = 1  # The 'No' value in Excel to test if TEST_SINGLE_ROW is True
+# Testing & Execution Modes
+DRY_RUN = True  # If True, form is filled and verified but NOT submitted
+TEST_SINGLE_ROW = True  # If True, only processes TEST_ROW_NO
+TEST_ROW_NO = 1
