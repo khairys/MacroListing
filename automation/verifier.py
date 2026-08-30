@@ -37,9 +37,11 @@ def verify_form_state(page: Page, row: dict):
         else:
             expected_price = str(row["Harga"])
             
-        price_input = page.locator("input[type='text']").filter(has_not=page.locator("[placeholder*='Clash of Clans']")).first
-        if price_input.count() == 0:
-            price_input = page.locator("input").filter(has_type="text").nth(1)
+        price_container = page.locator("label").filter(has_text="Price").locator("..")
+        if price_container.count() > 0:
+            price_input = price_container.locator("input[type='text']")
+        else:
+            price_input = page.locator("input[type='text']").filter(has_not=page.locator("[placeholder*='Clash of Clans']")).first
             
         actual_price = price_input.input_value().strip()
         if actual_price != expected_price:
@@ -52,7 +54,7 @@ def verify_form_state(page: Page, row: dict):
     # Check Terms
     try:
         terms_cb = page.get_by_role("checkbox", name="I agree with Terms of Service", exact=False)
-        if terms_cb.count() > 0 and not terms_cb.is_checked():
+        if terms_cb.count() > 0 and terms_cb.first.get_attribute("aria-checked") != "true":
              errors.append("Terms of Service is NOT checked.")
         else:
              print("    [OK] Terms checked")
@@ -84,6 +86,10 @@ def submit_and_verify(page: Page):
             if success_toast.is_visible():
                 print("    [OK] Listing created successfully (Toast visible).")
             else:
-                raise SubmissionError("SUBMIT_FAILED: Could not verify submission success via URL change or Toast.")
+                from automation.exceptions import SubmissionUnknownError
+                raise SubmissionUnknownError("SUBMISSION_UNKNOWN: Could not verify submission success. URL did not change and success toast not found.")
     except Exception as e:
+        from automation.exceptions import SubmissionUnknownError
+        if "SUBMISSION_UNKNOWN" in str(e):
+            raise
         raise SubmissionError(f"SUBMIT_FAILED: {str(e)}")

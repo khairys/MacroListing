@@ -7,14 +7,15 @@ from automation.validator import validate_dataset, resolve_image
 from automation.browser import BrowserManager
 from automation.form import (
     prepare_next_listing, select_category, select_game,
-    select_server, fill_title, fill_price, select_quantity,
-    select_delivery, fill_description, check_terms
+    select_server, fill_title, fill_price, ensure_multiple_quantity_disabled,
+    select_delivery, fill_description, ensure_terms_checked
 )
 from automation.uploader import upload_image_file
 from automation.verifier import verify_form_state, submit_and_verify
 from automation.exceptions import (
     ValidationError, FormInteractionError, ImageUploadError,
-    CaptchaDetectedError, VerificationError, SubmissionError
+    CaptchaDetectedError, VerificationError, SubmissionError,
+    SubmissionUnknownError
 )
 
 def setup_directories():
@@ -79,7 +80,7 @@ def process_row(page, row: dict, attempt: int = 1):
         fill_price(page, harga)
         print("[OK] Price")
         
-        select_quantity(page)
+        ensure_multiple_quantity_disabled(page)
         select_delivery(page)
         print("[OK] Delivery")
         
@@ -88,7 +89,7 @@ def process_row(page, row: dict, attempt: int = 1):
         upload_image_file(page, image_path)
         print("[OK] Image")
         
-        check_terms(page)
+        ensure_terms_checked(page)
         print("[OK] Terms")
         
         verify_form_state(page, row)
@@ -108,7 +109,7 @@ def process_row(page, row: dict, attempt: int = 1):
         input("Press Enter here when ready to retry...")
         return process_row(page, row, attempt)
         
-    except (FormInteractionError, ImageUploadError, VerificationError, SubmissionError, ValidationError) as e:
+    except (FormInteractionError, ImageUploadError, VerificationError, SubmissionError, ValidationError, SubmissionUnknownError) as e:
         err_msg = str(e)
         print(f"\n[ERROR] {err_msg}")
         
@@ -119,14 +120,18 @@ def process_row(page, row: dict, attempt: int = 1):
                 print(f"[DEBUG] Screenshot saved to {screenshot_path}")
             except:
                 pass
+                
+        # Do not retry on Validation Errors or if submission state is unknown to prevent duplicates
+        prevent_retry = isinstance(e, (ValidationError, SubmissionUnknownError))
         
-        if attempt < config.MAX_RETRIES and not isinstance(e, ValidationError):
+        if attempt < config.MAX_RETRIES and not prevent_retry:
             print(f"Retrying (Attempt {attempt + 1}/{config.MAX_RETRIES})...")
             return process_row(page, row, attempt + 1)
         else:
-            log_result(f"FAILED | No {row_no} | {err_msg}")
+            status = "SUBMISSION_UNKNOWN" if isinstance(e, SubmissionUnknownError) else "FAILED"
+            log_result(f"{status} | No {row_no} | {err_msg}")
             print("="*50)
-            return False, "FAILED"
+            return False, status
             
     except Exception as e:
         err_msg = f"UNKNOWN_ERROR: {str(e)}"

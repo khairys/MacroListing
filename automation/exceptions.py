@@ -25,3 +25,7 @@ class SubmissionError(Exception):
 class VerificationError(Exception):
     """Raised when the form state does not match expected values before submission."""
     pass
+
+class SubmissionUnknownError(Exception):
+    """Raised when the final form submission result is unknown (e.g. timeout after clicking submit)."""
+    pass
