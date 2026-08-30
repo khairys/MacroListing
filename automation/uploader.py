@@ -6,7 +6,7 @@ def upload_image_file(page: Page, image_path: str):
     try:
         file_input = page.locator("input[type='file']")
         if file_input.count() == 0:
-            raise ImageUploadError("File input element not found in DOM.")
+            raise ImageUploadError("IMAGE_UPLOAD_FAILED: File input element not found in DOM.")
             
         file_input.first.set_input_files(image_path)
         
@@ -19,4 +19,4 @@ def upload_image_file(page: Page, image_path: str):
         except Exception:
             print("    Image Warning: Could not detect preview thumbnail (locator might need adjustment). Assuming upload triggered.")
     except Exception as e:
-        raise ImageUploadError(f"Upload interaction failed: {str(e)}")
+        raise ImageUploadError(f"IMAGE_UPLOAD_FAILED: Upload interaction failed: {str(e)}")

@@ -12,7 +12,7 @@ def resolve_image(row_no: str) -> str:
             found_images.append(img_path)
     
     if not found_images:
-        raise ValidationError(f"Image not found for row {row_no}")
+        raise ValidationError(f"IMAGE_NOT_FOUND\nexpected image: images/{row_no}.[jpg/png/webp]")
     if len(found_images) > 1:
         raise ValidationError(f"Multiple images found for row {row_no}: {found_images}")
         

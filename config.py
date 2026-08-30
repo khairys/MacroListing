@@ -13,13 +13,12 @@ EXCEL_FILE_PATH = os.path.join(DATA_DIR, "data.xlsx")
 TARGET_URL = "https://zeusx.com/create-offer"
 
 # Playwright Settings
-HEADLESS = False  # Development mode requires False
 MAX_RETRIES = 2
+CDP_URL = "http://127.0.0.1:9222"
 
 # Image Settings
 IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
-# Testing & Execution Modes
-DRY_RUN = True  # If True, form is filled and verified but NOT submitted
-TEST_SINGLE_ROW = True  # If True, only processes TEST_ROW_NO
+# Execution Mode
+MODE = "test" # 'test' or 'batch'
 TEST_ROW_NO = 1
