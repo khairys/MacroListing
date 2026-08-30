@@ -77,18 +77,26 @@ def submit_and_verify(page: Page):
         submit_btn.first.click()
         
         print("    Waiting for submission verification...")
-        try:
-            # ZeusX might redirect or show a toast
-            page.wait_for_url("**/offers**", timeout=15000)
-            print("    [OK] Listing created successfully (Redirected).")
-        except Exception:
-            import re
-            success_toast = page.get_by_text(re.compile("successfully", re.IGNORECASE))
-            if success_toast.first.is_visible():
+        import re
+        import time
+        success_toast = page.get_by_text(re.compile("successfully", re.IGNORECASE)).first
+        
+        start_time = time.time()
+        verified = False
+        while time.time() - start_time < 15.0:
+            if "offers" in page.url.lower():
+                print("    [OK] Listing created successfully (Redirected).")
+                verified = True
+                break
+            if success_toast.is_visible():
                 print("    [OK] Listing created successfully (Toast visible).")
-            else:
-                from automation.exceptions import SubmissionUnknownError
-                raise SubmissionUnknownError("SUBMISSION_UNKNOWN: Could not verify submission success. URL did not change and success toast not found.")
+                verified = True
+                break
+            page.wait_for_timeout(250) # Cek setiap 250ms
+            
+        if not verified:
+            from automation.exceptions import SubmissionUnknownError
+            raise SubmissionUnknownError("SUBMISSION_UNKNOWN: Could not verify submission success. URL did not change and success toast not found.")
     except Exception as e:
         from automation.exceptions import SubmissionUnknownError
         if "SUBMISSION_UNKNOWN" in str(e):
