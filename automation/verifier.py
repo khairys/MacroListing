@@ -10,7 +10,7 @@ def verify_form_state(page: Page, row: dict):
     # Check Game
     expected_game = str(row["Game"])
     try:
-        selected_game = page.locator("div.co-select-game_selected").first
+        selected_game = page.locator("div[class*='co-select-game_selected']").first
         if expected_game not in selected_game.inner_text():
             errors.append(f"Game mismatch. Expected '{expected_game}', found '{selected_game.inner_text()}'")
         else:
@@ -82,8 +82,9 @@ def submit_and_verify(page: Page):
             page.wait_for_url("**/offers**", timeout=15000)
             print("    [OK] Listing created successfully (Redirected).")
         except Exception:
-            success_toast = page.get_by_text("successfully", ignore_case=True)
-            if success_toast.is_visible():
+            import re
+            success_toast = page.get_by_text(re.compile("successfully", re.IGNORECASE))
+            if success_toast.first.is_visible():
                 print("    [OK] Listing created successfully (Toast visible).")
             else:
                 from automation.exceptions import SubmissionUnknownError

@@ -42,7 +42,7 @@ def select_game(page: Page, game_name: str):
         page.wait_for_timeout(1000)
         
         # Verify
-        selected_game = page.locator("div.co-select-game_selected").first
+        selected_game = page.locator("div[class*='co-select-game_selected']").first
         if not selected_game.is_visible() or game_name not in selected_game.inner_text():
              raise FormInteractionError(f"GAME_SELECTION_FAILED: Game '{game_name}' was not selected successfully.")
     except Exception as e:
@@ -51,21 +51,35 @@ def select_game(page: Page, game_name: str):
 def select_server(page: Page, expected_server: str):
     print(f"    Server: Selecting '{expected_server}'...")
     try:
-        dropdown_trigger = page.get_by_text("Please select one option")
-        if dropdown_trigger.count() > 0 and dropdown_trigger.first.is_visible():
-            dropdown_trigger.first.click()
-            page.wait_for_timeout(500)
+        server_container = page.locator("div").filter(has_text="Server").locator("..").first
+        
+        # Check if already selected
+        if server_container.count() > 0 and server_container.is_visible():
+            wrapper = server_container.locator(".select-form_select-wrapper__wIt_A").first
+            if wrapper.count() > 0 and expected_server in wrapper.inner_text():
+                return
+                
+            if wrapper.count() > 0:
+                wrapper.click()
+                page.wait_for_timeout(500)
+        else:
+            dropdown_trigger = page.get_by_text("Please select one option")
+            if dropdown_trigger.count() > 0 and dropdown_trigger.first.is_visible():
+                dropdown_trigger.first.click()
+                page.wait_for_timeout(500)
             
         server_option = page.get_by_role("radio", name=expected_server)
-        if server_option.count() == 0:
-            raise FormInteractionError(f"SERVER_SELECTION_FAILED: '{expected_server}' option not found.")
+        if server_option.count() == 0 or not server_option.first.is_visible():
+            raise FormInteractionError(f"SERVER_SELECTION_FAILED: '{expected_server}' option not visible.")
              
         server_option.first.click()
-        page.wait_for_timeout(500)
+        page.wait_for_timeout(1000)
         
         # Verify state
-        if server_option.first.get_attribute("aria-checked") != "true":
-             raise FormInteractionError(f"SERVER_VERIFICATION_FAILED: '{expected_server}' is not active after click.")
+        if server_container.count() > 0 and server_container.is_visible():
+            wrapper = server_container.locator(".select-form_select-wrapper__wIt_A").first
+            if wrapper.count() > 0 and expected_server not in wrapper.inner_text():
+                 raise FormInteractionError(f"SERVER_VERIFICATION_FAILED: '{expected_server}' is not active after click.")
     except Exception as e:
         raise FormInteractionError(f"SERVER_SELECTION_FAILED: {e}")
 
@@ -138,13 +152,13 @@ def select_delivery(page: Page):
                      
         days_label = page.get_by_text("Days", exact=True)
         if days_label.count() > 0:
-             days_input = days_label.locator("xpath=preceding-sibling::input").first
+             days_input = days_label.locator("xpath=following-sibling::div//input").first
              if days_input.is_visible() and days_input.input_value() != "0":
                   days_input.fill("0")
                   
         hours_label = page.get_by_text("Hours", exact=True)
         if hours_label.count() > 0:
-             hours_input = hours_label.locator("xpath=preceding-sibling::input").first
+             hours_input = hours_label.locator("xpath=following-sibling::div//input").first
              if hours_input.is_visible() and hours_input.input_value() != "1":
                   hours_input.fill("1")
     except Exception as e:

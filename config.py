@@ -20,5 +20,5 @@ CDP_URL = "http://127.0.0.1:9222"
 IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
 # Execution Mode
-MODE = "test" # 'test' or 'batch'
+MODE = "batch" # 'test' or 'batch'
 TEST_ROW_NO = 1
