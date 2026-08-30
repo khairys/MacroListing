@@ -33,8 +33,17 @@ def select_game(page: Page, game_name: str):
             search_input.first.fill(game_name)
             page.wait_for_timeout(1000)
             
-        game_option = page.locator("div.co-select-game_game-item___jTq9").filter(has_text=game_name).first
-        game_option.wait_for(state="visible", timeout=10000)
+        import re
+        game_options = page.locator("div.co-select-game_game-item___jTq9").filter(has_text=re.compile(f"^{re.escape(game_name)}$"))
+        game_options.first.wait_for(state="visible", timeout=10000)
+        
+        count = game_options.count()
+        if count == 0:
+            raise FormInteractionError(f"GAME_NOT_FOUND: Could not find exact match for '{game_name}'")
+        elif count > 1:
+            raise FormInteractionError(f"GAME_AMBIGUOUS: Found {count} exact matches for '{game_name}'")
+            
+        game_option = game_options.first
         
         if "co-select-game_selected" not in game_option.get_attribute("class"):
             game_option.click()
@@ -43,34 +52,43 @@ def select_game(page: Page, game_name: str):
         
         # Verify
         selected_game = page.locator("div[class*='co-select-game_selected']").first
-        if not selected_game.is_visible() or game_name not in selected_game.inner_text():
+        if not selected_game.is_visible() or game_name != selected_game.inner_text().strip():
              raise FormInteractionError(f"GAME_SELECTION_FAILED: Game '{game_name}' was not selected successfully.")
     except Exception as e:
+        if isinstance(e, FormInteractionError):
+            raise
         raise FormInteractionError(f"GAME_SELECTION_FAILED: {e}")
 
 def select_server(page: Page, expected_server: str):
     print(f"    Server: Selecting '{expected_server}'...")
     try:
-        server_container = page.locator("div").filter(has_text="Server").locator("..").first
+        # Find the label exactly matching "Server" to get its container
+        import re
+        label = page.locator("div[class*='label']").filter(has_text=re.compile(r"^Server$")).first
+        if label.count() == 0:
+            label = page.locator("div").filter(has_text=re.compile(r"^Server$")).first
+            
+        server_container = label.locator("..")
         
         # Check if already selected
-        if server_container.count() > 0 and server_container.is_visible():
-            wrapper = server_container.locator(".select-form_select-wrapper__wIt_A").first
-            if wrapper.count() > 0 and expected_server in wrapper.inner_text():
+        wrapper = server_container.locator("div[class*='select-wrapper']").first
+        if wrapper.count() > 0:
+            if expected_server in wrapper.inner_text():
                 return
-                
-            if wrapper.count() > 0:
-                wrapper.click()
-                page.wait_for_timeout(500)
+            wrapper.click()
+            page.wait_for_timeout(500)
         else:
-            dropdown_trigger = page.get_by_text("Please select one option")
-            if dropdown_trigger.count() > 0 and dropdown_trigger.first.is_visible():
-                dropdown_trigger.first.click()
+            # Fallback if wrapper not found, click the text directly
+            fallback_trigger = server_container.get_by_text("Please select one option")
+            if fallback_trigger.count() > 0 and fallback_trigger.first.is_visible():
+                fallback_trigger.first.click()
                 page.wait_for_timeout(500)
             
         server_option = page.get_by_role("radio", name=expected_server)
-        if server_option.count() == 0 or not server_option.first.is_visible():
-            raise FormInteractionError(f"SERVER_SELECTION_FAILED: '{expected_server}' option not visible.")
+        try:
+            server_option.first.wait_for(state="visible", timeout=5000)
+        except Exception:
+            raise FormInteractionError(f"SERVER_SELECTION_FAILED: '{expected_server}' option not visible after click.")
              
         server_option.first.click()
         page.wait_for_timeout(1000)

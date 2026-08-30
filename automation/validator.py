@@ -2,21 +2,40 @@ import os
 import config
 from automation.exceptions import ValidationError
 
-def resolve_image(row_no: str) -> str:
-    """Finds image file matching row_no with supported extensions."""
+def resolve_images(row_no: str) -> list[str]:
+    """Finds image files matching row_no. 
+    Supports {NO}_{INDEX}.{ext} format and falls back to {NO}.{ext}."""
     found_images = []
-    for ext in config.IMAGE_EXTENSIONS:
-        img_name = f"{row_no}{ext}"
-        img_path = os.path.join(config.IMAGES_DIR, img_name)
-        if os.path.exists(img_path):
-            found_images.append(img_path)
     
-    if not found_images:
-        raise ValidationError(f"IMAGE_NOT_FOUND\nexpected image: images/{row_no}.[jpg/png/webp]")
-    if len(found_images) > 1:
-        raise ValidationError(f"Multiple images found for row {row_no}: {found_images}")
+    # Prioritas 1: {NO}_{INDEX}.{ext}
+    index = 1
+    while True:
+        found_at_current_index = False
+        for ext in config.IMAGE_EXTENSIONS:
+            img_name = f"{row_no}_{index}{ext}"
+            img_path = os.path.join(config.IMAGES_DIR, img_name)
+            if os.path.exists(img_path):
+                found_images.append(img_path)
+                found_at_current_index = True
+                break # Hanya ambil 1 ekstensi per index
+                
+        if not found_at_current_index:
+            break
+        index += 1
         
-    return found_images[0]
+    # Prioritas 2 (Fallback): {NO}.{ext} jika format index tidak ada sama sekali
+    if not found_images:
+        for ext in config.IMAGE_EXTENSIONS:
+            img_name = f"{row_no}{ext}"
+            img_path = os.path.join(config.IMAGES_DIR, img_name)
+            if os.path.exists(img_path):
+                found_images.append(img_path)
+                break
+                
+    if not found_images:
+        raise ValidationError(f"IMAGE_NOT_FOUND\nexpected image: images/{row_no}_1.[jpg/png/webp] or images/{row_no}.[jpg/png/webp]")
+        
+    return found_images
 
 def validate_dataset(dataset: list[dict]):
     """Pre-flight validation for the entire dataset."""
@@ -59,7 +78,7 @@ def validate_dataset(dataset: list[dict]):
             
         # Image check
         try:
-            resolve_image(row_no)
+            resolve_images(row_no)
         except ValidationError as e:
             errors.append(f"Row {row_idx}: {str(e)}")
             

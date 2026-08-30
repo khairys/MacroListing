@@ -3,14 +3,14 @@ import datetime
 import openpyxl
 
 import config
-from automation.validator import validate_dataset, resolve_image
+from automation.validator import validate_dataset, resolve_images
 from automation.browser import BrowserManager
 from automation.form import (
     prepare_next_listing, select_category, select_game,
     select_server, fill_title, fill_price, ensure_multiple_quantity_disabled,
     select_delivery, fill_description, ensure_terms_checked
 )
-from automation.uploader import upload_image_file
+from automation.uploader import upload_images
 from automation.verifier import verify_form_state, submit_and_verify
 from automation.exceptions import (
     ValidationError, FormInteractionError, ImageUploadError,
@@ -23,9 +23,10 @@ def setup_directories():
     os.makedirs(config.SCREENSHOTS_DIR, exist_ok=True)
     os.makedirs(os.path.join(config.LOGS_DIR, "errors"), exist_ok=True)
 
-def log_result(message: str):
+def log_result(msg: str):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted_msg = f"[{timestamp}] {message}"
+    formatted_msg = f"[{timestamp}] {msg}"
+    print(formatted_msg)
     with open(os.path.join(config.LOGS_DIR, "automation.log"), "a", encoding="utf-8") as f:
         f.write(formatted_msg + "\n")
 
@@ -60,8 +61,11 @@ def process_row(page, row: dict, attempt: int = 1):
     print(f"Title:\n{spesifikasi}")
     
     try:
-        image_path = resolve_image(row_no)
-        print(f"Image:\n{os.path.basename(image_path)}")
+        image_paths = resolve_images(row_no)
+        print("Images:")
+        print(f"{len(image_paths)} found")
+        for i, img in enumerate(image_paths):
+            print(f"Image {i+1}: {os.path.basename(img)}")
         
         prepare_next_listing(page)
         
@@ -86,8 +90,8 @@ def process_row(page, row: dict, attempt: int = 1):
         
         fill_description(page)
         
-        upload_image_file(page, image_path)
-        print("[OK] Image")
+        upload_images(page, image_paths)
+        print("[OK] All images uploaded")
         
         ensure_terms_checked(page)
         print("[OK] Terms")
