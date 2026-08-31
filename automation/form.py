@@ -1,6 +1,6 @@
 import time
 from playwright.sync_api import Page, expect
-import config
+import logs.dom.wuwa.config
 from automation.exceptions import FormInteractionError
 
 def prepare_next_listing(page: Page):
@@ -34,8 +34,11 @@ def select_game(page: Page, game_name: str):
             page.wait_for_timeout(1000)
             
         import re
-        game_options = page.locator("div.co-select-game_game-item___jTq9").filter(has_text=re.compile(f"^{re.escape(game_name)}$"))
-        game_options.first.wait_for(state="visible", timeout=10000)
+        game_options = page.locator("div.co-select-game_game-item___jTq9").filter(has_text=re.compile(f"^{re.escape(game_name)}$", re.IGNORECASE))
+        try:
+            game_options.first.wait_for(state="visible", timeout=10000)
+        except Exception:
+            pass # fallback to error checking below
         
         count = game_options.count()
         if count == 0:
@@ -52,7 +55,7 @@ def select_game(page: Page, game_name: str):
         
         # Verify
         selected_game = page.locator("div[class*='co-select-game_selected']").first
-        if not selected_game.is_visible() or game_name != selected_game.inner_text().strip():
+        if not selected_game.is_visible() or game_name.lower() != selected_game.inner_text().strip().lower():
              raise FormInteractionError(f"GAME_SELECTION_FAILED: Game '{game_name}' was not selected successfully.")
     except Exception as e:
         if isinstance(e, FormInteractionError):
@@ -84,7 +87,7 @@ def select_server(page: Page, expected_server: str):
                 fallback_trigger.first.click()
                 page.wait_for_timeout(500)
             
-        server_option = page.get_by_role("radio", name=expected_server)
+        server_option = page.get_by_role("radio", name=expected_server, exact=True)
         try:
             server_option.first.wait_for(state="visible", timeout=5000)
         except Exception:
@@ -100,6 +103,47 @@ def select_server(page: Page, expected_server: str):
                  raise FormInteractionError(f"SERVER_VERIFICATION_FAILED: '{expected_server}' is not active after click.")
     except Exception as e:
         raise FormInteractionError(f"SERVER_SELECTION_FAILED: {e}")
+
+def select_optional_dropdown(page: Page, label_name: str, option_value: str):
+    if not option_value or option_value.lower() == "none" or str(option_value).strip() == "":
+        return # Skip if no value provided
+        
+    print(f"    {label_name}: Selecting '{option_value}'...")
+    try:
+        import re
+        label = page.locator("div[class*='label']").filter(has_text=re.compile(f"^{re.escape(label_name)}$")).first
+        if label.count() == 0:
+            label = page.locator("div").filter(has_text=re.compile(f"^{re.escape(label_name)}$")).first
+            
+        if label.count() == 0:
+            print(f"    Warning: Dropdown label '{label_name}' not found. Skipping.")
+            return
+            
+        container = label.locator("..")
+        wrapper = container.locator("div[class*='select-wrapper']").first
+        
+        if wrapper.count() > 0:
+            if option_value in wrapper.inner_text():
+                return
+            wrapper.click()
+            page.wait_for_timeout(500)
+        else:
+            fallback_trigger = container.get_by_text("Please select one option")
+            if fallback_trigger.count() > 0 and fallback_trigger.first.is_visible():
+                fallback_trigger.first.click()
+                page.wait_for_timeout(500)
+                
+        option_elem = page.get_by_role("radio", name=option_value, exact=True)
+        try:
+            option_elem.first.wait_for(state="visible", timeout=5000)
+        except Exception:
+            raise FormInteractionError(f"DROPDOWN_SELECTION_FAILED: '{option_value}' option not visible after click for {label_name}.")
+             
+        option_elem.first.click()
+        page.wait_for_timeout(1000)
+        
+    except Exception as e:
+        raise FormInteractionError(f"DROPDOWN_SELECTION_FAILED ({label_name}): {e}")
 
 def fill_title(page: Page, title: str):
     print(f"    Listing Title: {title[:30]}...")

@@ -7,7 +7,7 @@ from automation.validator import validate_dataset, resolve_images
 from automation.browser import BrowserManager
 from automation.form import (
     prepare_next_listing, select_category, select_game,
-    select_server, fill_title, fill_price, ensure_multiple_quantity_disabled,
+    select_server, select_optional_dropdown, fill_title, fill_price, ensure_multiple_quantity_disabled,
     select_delivery, fill_description, ensure_terms_checked
 )
 from automation.uploader import upload_images
@@ -52,11 +52,13 @@ def process_row(page, row: dict, attempt: int = 1):
     server = str(row["Server"])
     harga = str(row["Harga"])
     spesifikasi = str(row["Spesifikasi"])
+    gender = str(row.get("gender", ""))
     
     print("\n" + "="*50)
     print(f"LISTING {row_no}")
     print(f"Game:\n{game}")
     print(f"Server:\n{server}")
+    print(f"Gender:\n{gender}")
     print(f"Price:\n{harga}")
     print(f"Title:\n{spesifikasi}")
     
@@ -77,6 +79,10 @@ def process_row(page, row: dict, attempt: int = 1):
         
         select_server(page, server)
         print("[OK] Server")
+        
+        select_optional_dropdown(page, "Player Gender", gender)
+        if gender and gender.lower() != "none":
+            print(f"[OK] Player Gender ({gender})")
         
         fill_title(page, spesifikasi)
         print("[OK] Title")

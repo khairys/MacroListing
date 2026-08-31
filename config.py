@@ -21,4 +21,4 @@ IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
 # Execution Mode
 MODE = "batch" # 'test' or 'batch'
-TEST_ROW_NO = 29
+TEST_ROW_NO = 30

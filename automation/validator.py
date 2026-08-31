@@ -1,5 +1,5 @@
 import os
-import config
+import logs.dom.wuwa.config
 from automation.exceptions import ValidationError
 
 def resolve_images(row_no: str) -> list[str]:

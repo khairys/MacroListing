@@ -11,7 +11,7 @@ def verify_form_state(page: Page, row: dict):
     expected_game = str(row["Game"])
     try:
         selected_game = page.locator("div[class*='co-select-game_selected']").first
-        if expected_game not in selected_game.inner_text():
+        if expected_game.lower() not in selected_game.inner_text().lower():
             errors.append(f"Game mismatch. Expected '{expected_game}', found '{selected_game.inner_text()}'")
         else:
             print(f"    [OK] Game: {expected_game}")
