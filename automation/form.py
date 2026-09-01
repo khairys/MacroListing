@@ -1,6 +1,6 @@
 import time
 from playwright.sync_api import Page, expect
-import logs.dom.wuwa.config
+import config
 from automation.exceptions import FormInteractionError
 
 def prepare_next_listing(page: Page):

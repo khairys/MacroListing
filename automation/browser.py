@@ -1,6 +1,6 @@
 import os
 from playwright.sync_api import sync_playwright, Page, expect
-import logs.dom.wuwa.config
+import config
 from automation.exceptions import CaptchaDetectedError, LoginRequiredError
 
 class BrowserManager:
