@@ -36,9 +36,16 @@ def read_excel() -> list[dict]:
     headers = [str(cell.value) for cell in sheet[1]]
     data = []
     for row in sheet.iter_rows(min_row=2, values_only=True):
+        # Skip completely empty rows
         if all(cell is None for cell in row):
             continue
+        
         row_dict = {headers[i]: value for i, value in enumerate(row) if i < len(headers)}
+        
+        # Additional safety check: If 'No' column is empty, it's a ghost row. Skip it.
+        if not row_dict.get("No") or str(row_dict.get("No")).strip() == "":
+            continue
+            
         data.append(row_dict)
     return data
 
