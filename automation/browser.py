@@ -1,7 +1,18 @@
+"""Browser Manager for MacroListing.
+
+Handles CDP connection to Chrome and page lifecycle.
+Does NOT use input() — fully automated, suitable for scheduler use.
+"""
+
 import os
-from playwright.sync_api import sync_playwright, Page, expect
+from playwright.sync_api import sync_playwright, Page
 import config
-from automation.exceptions import CaptchaDetectedError, LoginRequiredError
+from automation.exceptions import (
+    SiteUnavailableError, NetworkError, CloudflareChallengeError,
+    AuthenticationError, PageNotReadyError
+)
+from automation.site_health import check_site_health, raise_for_status, SiteStatus
+
 
 class BrowserManager:
     def __init__(self):
@@ -10,14 +21,27 @@ class BrowserManager:
         self.context = None
 
     def start(self) -> Page:
+        """Connects to Chrome via CDP and returns the active ZeusX page.
+        
+        Raises:
+            NetworkError: If CDP connection fails (Chrome not running)
+        """
         print(f"Connecting to Chrome via CDP at {config.CDP_URL}...")
         self.playwright = sync_playwright().start()
         
         try:
             self.browser = self.playwright.chromium.connect_over_cdp(config.CDP_URL)
         except Exception as e:
-            raise ConnectionError(f"Failed to connect to CDP at {config.CDP_URL}. Ensure chrome_launcher.py is running. Error: {e}")
+            self.stop()
+            raise NetworkError(
+                f"Failed to connect to Chrome CDP at {config.CDP_URL}. "
+                f"Ensure chrome_launcher.py is running. Error: {e}"
+            )
             
+        if not self.browser.contexts:
+            self.stop()
+            raise NetworkError("No browser contexts found. Chrome may not be ready.")
+        
         self.context = self.browser.contexts[0]
         
         target_page = None
@@ -32,37 +56,36 @@ class BrowserManager:
             
         return target_page
 
-    def check_cloudflare_or_login(self, page: Page):
-        """Checks if stuck on Cloudflare or requires login, and pauses if so."""
-        print(f"Checking access to {config.TARGET_URL}...")
-        page.goto(config.TARGET_URL, wait_until="domcontentloaded")
+    def ensure_ready(self, page: Page, target_url: str = None):
+        """Validates that the page is on ZeusX and ready for automation.
         
-        cf_markers = page.locator(".cf-turnstile, iframe[src*='cloudflare'], #challenge-running")
-        if cf_markers.count() > 0 or "just a moment" in page.title().lower():
-            print("\n[!] CLOUDFLARE_REQUIRED: Cloudflare challenge detected.")
-            print("Please solve the challenge manually in the Chrome window.")
-            input("Press ENTER here after the page fully loads ZeusX...")
-            page.goto(config.TARGET_URL, wait_until="domcontentloaded")
-            
-        login_indicators = page.get_by_role("link", name="Login", exact=False).or_(page.get_by_role("button", name="Login", exact=False))
-        if login_indicators.count() > 0 or "login" in page.url.lower():
-            print("\n[!] AUTH_REQUIRED: You are not logged in to ZeusX.")
-            print("Please login manually in the Chrome window.")
-            input("Press ENTER here after you have successfully logged in...")
-            page.goto(config.TARGET_URL, wait_until="domcontentloaded")
-            
-        if "create-offer" not in page.url:
-            print("\n[!] PAGE_NOT_READY: Failed to reach Create Offer page.")
-            print("Please navigate to Create Offer manually.")
-            input("Press ENTER here when ready...")
-            
-    def ensure_login(self, page: Page):
-        """Ensures the page is ready for automation."""
-        self.check_cloudflare_or_login(page)
+        Unlike the old check_cloudflare_or_login(), this does NOT use input().
+        It raises the appropriate exception so the caller can decide what to do.
+        
+        Raises:
+            SiteUnavailableError: ZeusX is down
+            NetworkError: Network issues
+            CloudflareChallengeError: Cloudflare blocking
+            AuthenticationError: Login required
+            PageNotReadyError: Page in unexpected state
+        """
+        url = target_url or config.TARGET_URL
+        status = check_site_health(page, url)
+        
+        if status != SiteStatus.SITE_READY:
+            raise_for_status(status)
+        
         print("Page is ready. Starting automation...")
 
     def stop(self):
-        if self.browser:
-            self.browser.close()
-        if self.playwright:
-            self.playwright.stop()
+        """Safely disconnects from the browser."""
+        try:
+            if self.browser:
+                self.browser.close()
+        except Exception:
+            pass
+        try:
+            if self.playwright:
+                self.playwright.stop()
+        except Exception:
+            pass

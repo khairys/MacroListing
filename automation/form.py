@@ -1,10 +1,24 @@
 import time
 from playwright.sync_api import Page, expect
 import config
-from automation.exceptions import FormInteractionError
+from automation.exceptions import FormInteractionError, SiteError
+from automation.site_health import quick_page_health_check, raise_for_status, SiteStatus
+
+
+def page_health_guard(page: Page):
+    """Checks that the page is still healthy before a critical form operation.
+    
+    Raises SiteError (not FormInteractionError) if the page has silently
+    changed to Cloudflare, error page, login page, etc.
+    """
+    status = quick_page_health_check(page)
+    if status != SiteStatus.SITE_READY:
+        raise_for_status(status)
+
 
 def prepare_next_listing(page: Page):
     """Resets the form state for the next listing."""
+    page_health_guard(page)
     if "create-offer" not in page.url:
         page.goto(config.TARGET_URL, wait_until="domcontentloaded")
     else:
@@ -27,6 +41,7 @@ def select_category(page: Page):
 
 def select_game(page: Page, game_name: str):
     print(f"    Game: Searching and selecting '{game_name}'...")
+    page_health_guard(page)
     try:
         search_input = page.get_by_placeholder("Search by game name", exact=False).or_(page.get_by_placeholder("Search game", exact=False))
         if search_input.count() > 0 and search_input.first.is_visible():
@@ -232,6 +247,7 @@ def fill_description(page: Page):
 
 def ensure_terms_checked(page: Page):
     print("    Terms: Ensuring terms checkbox is checked")
+    page_health_guard(page)
     try:
         terms_cb = page.get_by_role("checkbox", name="I agree with Terms of Service", exact=False)
         if terms_cb.count() == 0:
