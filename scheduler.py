@@ -27,8 +27,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 from automation import state_manager
 
-# Schedule configuration
-INTERVAL_HOURS = 3
+# Schedule configuration (Base 2 Hours ± 10 Minutes Jitter: 1h 50m to 2h 10m)
+BASE_INTERVAL_HOURS = 2
+JITTER_MINUTES = 10
+
+MIN_INTERVAL_MINUTES = (BASE_INTERVAL_HOURS * 60) - JITTER_MINUTES  # 110 minutes (1h 50m)
+MAX_INTERVAL_MINUTES = (BASE_INTERVAL_HOURS * 60) + JITTER_MINUTES  # 130 minutes (2h 10m)
+MIN_INTERVAL_SECONDS = MIN_INTERVAL_MINUTES * 60
+MAX_INTERVAL_SECONDS = MAX_INTERVAL_MINUTES * 60
 
 # Retry policy (progressive backoff in seconds)
 _BACKOFF_SCHEDULE = [60, 120, 300, 600, 900]
@@ -149,7 +155,7 @@ def wait_for_site_recovery() -> bool:
 def job():
     """Executes one full automation cycle: health → clear → upload."""
     log("=" * 60)
-    log(f"Initiating Scheduled Automation Cycle (Interval: {INTERVAL_HOURS} Hours)")
+    log(f"Initiating Scheduled Automation Cycle (Base: {BASE_INTERVAL_HOURS}h ± {JITTER_MINUTES}m)")
     log("=" * 60)
     
     # === PHASE 1: SITE HEALTH CHECK ===
@@ -228,7 +234,7 @@ def job():
         log(f"[UPLOAD] Finished with exit code {upload_code}.")
     
     log("=" * 60)
-    log(f"Cycle complete. Next cycle in {INTERVAL_HOURS} hours...")
+    log("Cycle complete.")
     log("=" * 60)
 
 
@@ -244,18 +250,30 @@ if __name__ == "__main__":
     log("Triggering the first run immediately...")
     job()
     
-    # Schedule recurring runs
+    # Schedule recurring runs with randomized jitter (1h 50m to 2h 10m)
     import schedule
-    schedule.every(INTERVAL_HOURS).hours.do(job)
+    scheduled_job = schedule.every(MIN_INTERVAL_SECONDS).to(MAX_INTERVAL_SECONDS).seconds.do(job)
     
-    log(f"Scheduler is now ACTIVE. Timer set for every {INTERVAL_HOURS} hours.")
+    log(f"Scheduler is now ACTIVE.")
+    log(f"Cycle interval: {MIN_INTERVAL_MINUTES} to {MAX_INTERVAL_MINUTES} minutes (1h 50m to 2h 10m, randomized).")
+    if scheduled_job.next_run:
+        log(f"Next cycle scheduled at: {scheduled_job.next_run.strftime('%Y-%m-%d %H:%M:%S')}")
     log("You can minimize this terminal. Press CTRL+C to stop.")
     
+    last_logged_next_run = scheduled_job.next_run
+
     # Infinite loop
     while True:
         try:
             schedule.run_pending()
-            time.sleep(60)
+            
+            # Log next run time whenever schedule recalculates a new run time
+            if scheduled_job.next_run != last_logged_next_run and scheduled_job.next_run is not None:
+                remaining_mins = max(0.0, (scheduled_job.next_run - datetime.now()).total_seconds() / 60)
+                log(f"Next cycle scheduled at: {scheduled_job.next_run.strftime('%Y-%m-%d %H:%M:%S')} (in {remaining_mins:.1f} minutes)")
+                last_logged_next_run = scheduled_job.next_run
+                
+            time.sleep(10)
         except KeyboardInterrupt:
             log("Scheduler stopped by user.")
             break
