@@ -7,7 +7,13 @@ IMAGES_DIR = os.path.join(BASE_DIR, "images")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 SCREENSHOTS_DIR = os.path.join(LOGS_DIR, "screenshots")
 BROWSER_PROFILE_PATH = os.path.join(BASE_DIR, "browser-profile")
-EXCEL_FILE_PATH = os.path.join(DATA_DIR, "data.xlsx")
+# Excel Path Priority: data/List Akun.xlsx -> data/data.xlsx -> data.xlsx
+_possible_excel_paths = [
+    os.path.join(DATA_DIR, "List Akun.xlsx"),
+    os.path.join(DATA_DIR, "data.xlsx"),
+    os.path.join(BASE_DIR, "data.xlsx"),
+]
+EXCEL_FILE_PATH = next((p for p in _possible_excel_paths if os.path.exists(p)), _possible_excel_paths[0])
 
 # Target
 TARGET_URL = "https://zeusx.com/create-offer"
@@ -19,9 +25,28 @@ CDP_URL = "http://127.0.0.1:9222"
 # Image Settings
 IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
+# Game Registry: Maps short codes to ZeusX official names and image directories
+GAME_REGISTRY = {
+    "HSR": {
+        "zeus_name": "Honkai: Star Rail",
+        "image_folder": "hsr",
+        "default_gender": None,
+    },
+    "WUWA": {
+        "zeus_name": "wuthering waves",
+        "image_folder": "wuwa",
+        "default_gender": "Male",
+    },
+    "CZN": {
+        "zeus_name": "Chaos Zero Nightmare",
+        "image_folder": "czn",
+        "default_gender": None,
+    },
+}
+
 # Execution Mode
 MODE = "batch" # 'test' or 'batch'
-TEST_ROW_NO = 30
+TEST_ROW_NO = "HSR_1" # In test mode, match against ID (e.g. 'HSR_1') or No ('1')
 
 # --- Resilience Configuration ---
 

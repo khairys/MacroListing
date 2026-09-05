@@ -8,7 +8,7 @@ def verify_form_state(page: Page, row: dict):
     errors = []
     
     # Check Game
-    expected_game = str(row["Game"])
+    expected_game = str(row.get("Game") or row.get("game", ""))
     try:
         selected_game = page.locator("div[class*='co-select-game_selected']").first
         if expected_game.lower() not in selected_game.inner_text().lower():
@@ -19,7 +19,7 @@ def verify_form_state(page: Page, row: dict):
          errors.append("Game selection not found or couldn't be verified.")
          
     # Check Title
-    expected_title = str(row["Spesifikasi"]).strip()
+    expected_title = str(row.get("Spesifikasi") or row.get("spesifikasi", "")).strip()
     try:
         title_input = page.get_by_placeholder("Eg: Clash of Clans Account Lv 10")
         actual_title = title_input.input_value().strip()
@@ -32,10 +32,11 @@ def verify_form_state(page: Page, row: dict):
          
     # Check Price
     try:
-        if float(row["Harga"]).is_integer():
-            expected_price = str(int(float(row["Harga"])))
+        raw_price = str(row.get("Harga") or row.get("harga", ""))
+        if float(raw_price).is_integer():
+            expected_price = str(int(float(raw_price)))
         else:
-            expected_price = str(row["Harga"])
+            expected_price = raw_price
             
         price_container = page.locator("label").filter(has_text="Price").locator("..")
         if price_container.count() > 0:

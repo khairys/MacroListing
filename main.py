@@ -18,6 +18,7 @@ import datetime
 import openpyxl
 
 import config
+from automation.data_loader import load_and_normalize_dataset
 from automation.validator import validate_dataset, resolve_images
 from automation.browser import BrowserManager
 from automation.site_health import check_site_health, raise_for_status, SiteStatus
@@ -55,30 +56,8 @@ def log_result(msg: str):
 
 
 def read_excel() -> list[dict]:
-    wb = openpyxl.load_workbook(config.EXCEL_FILE_PATH, data_only=True)
-    sheet = wb.active
-    headers = [str(cell.value) for cell in sheet[1]]
-    data = []
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        # Skip completely empty rows
-        if all(cell is None for cell in row):
-            continue
-        
-        row_dict = {headers[i]: value for i, value in enumerate(row) if i < len(headers)}
-        
-        # Additional safety check: If 'No' column is empty, it's a ghost row. Skip it.
-        if not row_dict.get("No") or str(row_dict.get("No")).strip() == "":
-            continue
-            
-        data.append(row_dict)
-    return data
-
-
-def normalize_no(val):
-    try:
-        return str(int(float(val)))
-    except (ValueError, TypeError):
-        return str(val).strip()
+    """Loads and normalizes account listings from Excel via data_loader."""
+    return load_and_normalize_dataset()
 
 
 def process_row(page, row: dict, attempt: int = 1):
@@ -91,15 +70,17 @@ def process_row(page, row: dict, attempt: int = 1):
         SiteError: If site becomes unavailable mid-listing. This is NOT caught
                    here — it propagates to the main loop for site-level recovery.
     """
-    row_no = normalize_no(row["No"])
-    game = str(row["Game"])
-    server = str(row["Server"])
-    harga = str(row["Harga"])
-    spesifikasi = str(row["Spesifikasi"])
+    listing_id = row.get("id", str(row.get("no", "")))
+    row_no = str(row.get("no", ""))
+    game_code = str(row.get("game_code", ""))
+    game = str(row.get("game", ""))
+    server = str(row.get("server", ""))
+    harga = str(row.get("harga", ""))
+    spesifikasi = str(row.get("spesifikasi", ""))
     gender = str(row.get("gender", ""))
     
     print("\n" + "="*50)
-    print(f"LISTING {row_no}")
+    print(f"LISTING: {listing_id} ({game_code} #{row_no})")
     print(f"Game:\n{game}")
     print(f"Server:\n{server}")
     print(f"Gender:\n{gender}")
@@ -107,7 +88,7 @@ def process_row(page, row: dict, attempt: int = 1):
     print(f"Title:\n{spesifikasi}")
     
     try:
-        image_paths = resolve_images(row_no)
+        image_paths = row.get("image_paths") or resolve_images(game_code, row_no, row.get("image_folder"))
         print("Images:")
         print(f"{len(image_paths)} found")
         for i, img in enumerate(image_paths):
@@ -153,7 +134,7 @@ def process_row(page, row: dict, attempt: int = 1):
         submit_and_verify(page)
         print("[OK] Listing created")
         
-        log_result(f"SUCCESS | No {row_no} | {game}")
+        log_result(f"SUCCESS | {listing_id} | {game}")
         print("="*50)
         return True, "SUCCESS"
     
@@ -166,8 +147,8 @@ def process_row(page, row: dict, attempt: int = 1):
     except SubmissionUnknownError as e:
         err_msg = str(e)
         print(f"\n[!] SUBMISSION_UNKNOWN: {err_msg}")
-        _take_error_screenshot(page, row_no, "unknown")
-        log_result(f"SUBMISSION_UNKNOWN | No {row_no} | {err_msg}")
+        _take_error_screenshot(page, listing_id, "unknown")
+        log_result(f"SUBMISSION_UNKNOWN | {listing_id} | {err_msg}")
         print("="*50)
         return False, "SUBMISSION_UNKNOWN"
     
@@ -176,30 +157,31 @@ def process_row(page, row: dict, attempt: int = 1):
             SubmissionError, ValidationError, CaptchaDetectedError) as e:
         err_msg = str(e)
         print(f"\n[ERROR] {err_msg}")
-        _take_error_screenshot(page, row_no, "error")
+        _take_error_screenshot(page, listing_id, "error")
         
         if attempt < config.MAX_LISTING_RETRIES and is_retryable_for_listing(e):
             print(f"Retrying (Attempt {attempt + 1}/{config.MAX_LISTING_RETRIES})...")
             return process_row(page, row, attempt + 1)
         else:
-            log_result(f"FAILED | No {row_no} | {err_msg}")
+            log_result(f"FAILED | {listing_id} | {err_msg}")
             print("="*50)
             return False, "FAILED"
             
     except Exception as e:
         err_msg = f"UNKNOWN_ERROR: {str(e)}"
         print(f"\n[FATAL ERROR] {err_msg}")
-        _take_error_screenshot(page, row_no, "fatal")
-        log_result(f"FAILED | No {row_no} | {err_msg}")
+        _take_error_screenshot(page, listing_id, "fatal")
+        log_result(f"FAILED | {listing_id} | {err_msg}")
         print("="*50)
         return False, "FAILED"
 
 
-def _take_error_screenshot(page, row_no: str, suffix: str):
+def _take_error_screenshot(page, listing_id: str, suffix: str):
     """Safely takes a screenshot for debugging. Never raises."""
     try:
+        clean_id = str(listing_id).replace("/", "_").replace("\\", "_")
         screenshot_path = os.path.join(
-            config.LOGS_DIR, "errors", f"listing_{row_no}_{suffix}.png"
+            config.LOGS_DIR, "errors", f"listing_{clean_id}_{suffix}.png"
         )
         page.screenshot(path=screenshot_path)
         print(f"[DEBUG] Screenshot saved to {screenshot_path}")
@@ -215,8 +197,12 @@ def main():
     dataset = read_excel()
     
     if config.MODE.lower() == "test":
-        dataset = [r for r in dataset if normalize_no(r.get("No")) == str(config.TEST_ROW_NO)]
-        print(f"TEST MODE active. Processing ONLY No {config.TEST_ROW_NO}.")
+        target = str(config.TEST_ROW_NO).strip().upper()
+        dataset = [
+            r for r in dataset 
+            if r.get("id", "").upper() == target or str(r.get("no", "")).strip() == target
+        ]
+        print(f"TEST MODE active. Processing ONLY target '{config.TEST_ROW_NO}'.")
     
     if not dataset:
         print("No valid data to process.")
@@ -263,8 +249,11 @@ def main():
         print(f"[RESUME] Skipping submission-unknown listings (will NOT retry): {unknown}")
     
     # Filter out already-processed listings
-    skip_nos = set(completed) | set(unknown)
-    pending_dataset = [r for r in dataset if normalize_no(r.get("No")) not in skip_nos]
+    skip_ids = set(completed) | set(unknown)
+    pending_dataset = [
+        r for r in dataset 
+        if r.get("id") not in skip_ids and str(r.get("no")) not in skip_ids
+    ]
     
     if not pending_dataset:
         print("All listings already processed. Nothing to do.")
@@ -276,30 +265,30 @@ def main():
     exit_code = config.EXIT_SUCCESS
     
     for row in pending_dataset:
-        row_no = normalize_no(row["No"])
-        state_manager.mark_listing_started(row_no)
+        listing_id = row.get("id", str(row.get("no", "")))
+        state_manager.mark_listing_started(listing_id)
         
         try:
             success, status = process_row(page, row)
         except SiteError as e:
             # Site went down mid-batch. Pause and exit for recovery.
-            print(f"\n[SITE ERROR] Site became unavailable during listing {row_no}: {e}")
+            print(f"\n[SITE ERROR] Site became unavailable during listing {listing_id}: {e}")
             state_manager.mark_cycle_paused(str(e))
-            log_result(f"SITE_ERROR | No {row_no} | {e}")
+            log_result(f"SITE_ERROR | {listing_id} | {e}")
             exit_code = config.EXIT_SITE_UNAVAILABLE
             break
         
         if success:
             results["success"] += 1
-            state_manager.mark_listing_completed(row_no)
+            state_manager.mark_listing_completed(listing_id)
         elif status == "SUBMISSION_UNKNOWN":
             results["unknown"] += 1
-            state_manager.mark_listing_unknown(row_no)
+            state_manager.mark_listing_unknown(listing_id)
             exit_code = config.EXIT_SUBMISSION_UNKNOWN
         else:
             results["failed"] += 1
-            results["failed_nos"].append(row_no)
-            state_manager.mark_listing_failed(row_no)
+            results["failed_nos"].append(listing_id)
+            state_manager.mark_listing_failed(listing_id)
             if exit_code == config.EXIT_SUCCESS:
                 exit_code = config.EXIT_AUTOMATION_FAILURE
 
