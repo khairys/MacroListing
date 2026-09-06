@@ -230,6 +230,24 @@ def load_and_normalize_dataset(file_path: str = None) -> list[dict]:
         # Unique ID for tracking (prevents collision between HSR #1, CZN #1, WUWA #1)
         listing_id = f"{game_code}_{no}" if no else f"{game_code}_row{row_idx}"
 
+        # 7. Check Exclusion List from config.py
+        exclude_list = getattr(config, "EXCLUDE_LISTINGS", [])
+        if exclude_list:
+            is_excluded = False
+            for excl in exclude_list:
+                excl_clean = str(excl).strip().lower()
+                if not excl_clean:
+                    continue
+                # Match by ID, No, or partial match in spesifikasi / raw harga
+                if (excl_clean == listing_id.lower() or 
+                    excl_clean == str(no).lower() or 
+                    excl_clean in spesifikasi.lower() or 
+                    (raw_harga is not None and excl_clean in str(raw_harga).lower())):
+                    is_excluded = True
+                    break
+            if is_excluded:
+                continue
+
         dataset.append({
             "id": listing_id,
             "row_index": row_idx,

@@ -48,6 +48,12 @@ GAME_REGISTRY = {
 MODE = "batch" # 'test' or 'batch'
 TEST_ROW_NO = "HSR_1" # In test mode, match against ID (e.g. 'HSR_1') or No ('1')
 
+# Exclusion List: Daftar listing yang tidak ingin di-upload ke ZeusX.
+# Bisa diisi ID unik (contoh: 'HSR_11'), nomor akun, atau cuplikan teks spesifikasi.
+EXCLUDE_LISTINGS = [
+    "HSR_11",  # 11.80 | Asia | Ashveil E6 and Robin Summeretto E2 | Danheng,Gilgamesh,Huohuo | 18 Ticket
+]
+
 # --- Resilience Configuration ---
 
 # Timeouts (milliseconds, for Playwright)
