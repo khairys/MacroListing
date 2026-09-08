@@ -241,6 +241,10 @@ def main():
         return config.EXIT_SITE_UNAVAILABLE
     
     # --- State / Resume ---
+    current_state = state_manager.load_state()
+    if current_state is None:
+        state_manager.create_new_cycle(len(dataset))
+    
     completed = state_manager.get_completed_listings()
     unknown = state_manager.get_unknown_listings()
     if completed:
@@ -294,7 +298,7 @@ def main():
 
     # Only mark completed if we didn't break out of the loop due to site error
     if exit_code not in (config.EXIT_SITE_UNAVAILABLE,):
-        state_manager.mark_cycle_completed()
+        state_manager.mark_cycle_completed(summary=results)
     
     bm.stop()
     

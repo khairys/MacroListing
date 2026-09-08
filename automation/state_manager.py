@@ -76,11 +76,17 @@ def create_new_cycle(total_listings: int) -> dict:
     return state
 
 
-def mark_listing_started(listing_no: str):
-    """Marks a listing as currently being processed."""
+def _get_or_create_state() -> dict:
+    """Loads existing state or initializes a new cycle state if none exists."""
     state = load_state()
     if state is None:
-        return
+        state = create_new_cycle(0)
+    return state
+
+
+def mark_listing_started(listing_no: str):
+    """Marks a listing as currently being processed."""
+    state = _get_or_create_state()
     state["current_listing"] = listing_no
     state["last_updated"] = datetime.now().isoformat()
     _atomic_write(state)
@@ -88,9 +94,7 @@ def mark_listing_started(listing_no: str):
 
 def mark_listing_completed(listing_no: str):
     """Marks a listing as successfully submitted and verified."""
-    state = load_state()
-    if state is None:
-        return
+    state = _get_or_create_state()
     if listing_no not in state["completed_listings"]:
         state["completed_listings"].append(listing_no)
     state["current_listing"] = None
@@ -100,9 +104,7 @@ def mark_listing_completed(listing_no: str):
 
 def mark_listing_failed(listing_no: str):
     """Marks a listing as definitively failed (all retries exhausted)."""
-    state = load_state()
-    if state is None:
-        return
+    state = _get_or_create_state()
     if listing_no not in state["failed_listings"]:
         state["failed_listings"].append(listing_no)
     state["current_listing"] = None
@@ -112,9 +114,7 @@ def mark_listing_failed(listing_no: str):
 
 def mark_listing_unknown(listing_no: str):
     """Marks a listing as submission-unknown. Will NOT be auto-retried."""
-    state = load_state()
-    if state is None:
-        return
+    state = _get_or_create_state()
     if listing_no not in state["unknown_listings"]:
         state["unknown_listings"].append(listing_no)
     state["current_listing"] = None
@@ -124,22 +124,20 @@ def mark_listing_unknown(listing_no: str):
 
 def mark_cycle_paused(reason: str):
     """Marks the cycle as paused (e.g., site went down mid-batch)."""
-    state = load_state()
-    if state is None:
-        return
+    state = _get_or_create_state()
     state["status"] = "paused"
     state["pause_reason"] = reason
     state["last_updated"] = datetime.now().isoformat()
     _atomic_write(state)
 
 
-def mark_cycle_completed():
+def mark_cycle_completed(summary: dict | None = None):
     """Marks the cycle as fully completed."""
-    state = load_state()
-    if state is None:
-        return
+    state = _get_or_create_state()
     state["status"] = "completed"
     state["current_listing"] = None
+    if summary:
+        state["summary"] = summary
     state["last_updated"] = datetime.now().isoformat()
     _atomic_write(state)
 

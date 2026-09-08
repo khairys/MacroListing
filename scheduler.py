@@ -121,6 +121,32 @@ class SchedulerMetrics:
     next_run_dt = None
 
 
+def parse_cycle_counts_from_log(start_dt: datetime, end_dt: datetime) -> dict:
+    """Fallback: counts success/failed/unknown listings from automation.log within a time window."""
+    auto_log_path = os.path.join(config.LOGS_DIR, "automation.log")
+    counts = {"success": 0, "failed": 0, "unknown": 0}
+    if not os.path.exists(auto_log_path):
+        return counts
+    try:
+        pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (SUCCESS|FAILED|SUBMISSION_UNKNOWN) \| (.+)")
+        with open(auto_log_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                m = pattern.match(line.strip())
+                if m:
+                    log_time = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+                    if start_dt <= log_time <= end_dt:
+                        status = m.group(2)
+                        if status == "SUCCESS":
+                            counts["success"] += 1
+                        elif status == "FAILED":
+                            counts["failed"] += 1
+                        elif status == "SUBMISSION_UNKNOWN":
+                            counts["unknown"] += 1
+    except Exception:
+        pass
+    return counts
+
+
 def print_cycle_summary_card(start_dt: datetime, end_dt: datetime, clear_status: str, upload_code: int, state_data: dict):
     """Prints a beautiful formatted dashboard card summarizing the completed cycle."""
     SchedulerMetrics.cycle_count += 1
@@ -132,6 +158,20 @@ def print_cycle_summary_card(start_dt: datetime, end_dt: datetime, clear_status:
     completed = len(state_data.get("completed_listings", [])) if state_data else 0
     failed = len(state_data.get("failed_listings", [])) if state_data else 0
     unknown = len(state_data.get("unknown_listings", [])) if state_data else 0
+
+    # Fallback 1: Jika summary dict tersedia di state_data
+    if not completed and state_data and "summary" in state_data:
+        completed = state_data["summary"].get("success", 0)
+        failed = state_data["summary"].get("failed", 0)
+        unknown = state_data["summary"].get("unknown", 0)
+
+    # Fallback 2: Jika state kosong / 0, parse metrik dari logs/automation.log
+    if completed == 0 and failed == 0 and unknown == 0:
+        counts = parse_cycle_counts_from_log(start_dt, end_dt)
+        completed = counts.get("success", 0)
+        failed = counts.get("failed", 0)
+        unknown = counts.get("unknown", 0)
+
     SchedulerMetrics.daily_uploaded += completed
     SchedulerMetrics.last_cycle_counts = {"success": completed, "failed": failed, "unknown": unknown}
 
@@ -377,13 +417,16 @@ def print_status_peek():
     failed = st.get("failed_listings", [])
     unknown = st.get("unknown_listings", [])
     
+    succ_display = f"{len(completed)} listing" if completed else f"{SchedulerMetrics.last_cycle_counts['success']} listing (siklus terakhir)"
+    succ_preview = f": {', '.join(completed[:10])}{' ...' if len(completed) > 10 else ''}" if completed else ""
+    
     msg = f"""
 {C.CYAN}--- STATUS AUDIT CEPAT ---
 Total Siklus Selesai: {SchedulerMetrics.cycle_count}
 Total Listing Sukses Hari Ini: {SchedulerMetrics.daily_uploaded}
 Siklus Terakhir: {SchedulerMetrics.last_cycle_status} (Durasi: {SchedulerMetrics.last_cycle_duration})
 Listing Terproses di State Terakhir:
-  • Sukses  ({len(completed)}): {', '.join(completed[:10])}{' ...' if len(completed) > 10 else ''}
+  • Sukses  ({succ_display}){succ_preview}
   • Gagal   ({len(failed)}): {', '.join(failed) if failed else 'None'}
   • Unknown ({len(unknown)}): {', '.join(unknown) if unknown else 'None'}
 ---------------------------{C.RESET}"""
